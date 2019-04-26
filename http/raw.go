@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
+	"log"
 
 	"github.com/filebrowser/filebrowser/v2/files"
 	"github.com/filebrowser/filebrowser/v2/users"
@@ -78,7 +79,7 @@ var rawHandler = withUser(func(w http.ResponseWriter, r *http.Request, d *data) 
 	return rawDirHandler(w, r, d, file)
 })
 
-func addFile(ar archiver.Writer, d *data, path string) error {
+func addFile(ar archiver.Writer, d *data, path string, basedir *files.FileInfo) error {
 	// Checks are always done with paths with "/" as path separator.
 	path = strings.Replace(path, "\\", "/", -1)
 	if !d.Check(path) {
@@ -96,10 +97,12 @@ func addFile(ar archiver.Writer, d *data, path string) error {
 	}
 	defer file.Close()
 
+
+	log.Println(path, basedir.Path)
 	err = ar.Write(archiver.File{
 		FileInfo: archiver.FileInfo{
 			FileInfo:   info,
-			CustomName: strings.TrimPrefix(path, "/"),
+			CustomName: strings.TrimPrefix(path, basedir.Path),
 		},
 		ReadCloser: file,
 	})
@@ -114,7 +117,7 @@ func addFile(ar archiver.Writer, d *data, path string) error {
 		}
 
 		for _, name := range names {
-			err = addFile(ar, d, filepath.Join(path, name))
+			err = addFile(ar, d, filepath.Join(path, name), basedir)
 			if err != nil {
 				return err
 			}
@@ -149,7 +152,7 @@ func rawDirHandler(w http.ResponseWriter, r *http.Request, d *data, file *files.
 	defer ar.Close()
 
 	for _, fname := range filenames {
-		err = addFile(ar, d, fname)
+		err = addFile(ar, d, fname, file)
 		if err != nil {
 			return http.StatusInternalServerError, err
 		}
