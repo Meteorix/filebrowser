@@ -6,7 +6,6 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
-	"log"
 
 	"github.com/filebrowser/filebrowser/v2/files"
 	"github.com/filebrowser/filebrowser/v2/users"
@@ -79,7 +78,7 @@ var rawHandler = withUser(func(w http.ResponseWriter, r *http.Request, d *data) 
 	return rawDirHandler(w, r, d, file)
 })
 
-func addFile(ar archiver.Writer, d *data, path string, basedir *files.FileInfo) error {
+func addFile(ar archiver.Writer, d *data, path string, basedir string) error {
 	// Checks are always done with paths with "/" as path separator.
 	path = strings.Replace(path, "\\", "/", -1)
 	if !d.Check(path) {
@@ -97,17 +96,20 @@ func addFile(ar archiver.Writer, d *data, path string, basedir *files.FileInfo) 
 	}
 	defer file.Close()
 
+	customName := strings.TrimPrefix(path, basedir)
+	customName = strings.TrimPrefix(customName, "/")
 
-	log.Println(path, basedir.Path)
-	err = ar.Write(archiver.File{
-		FileInfo: archiver.FileInfo{
-			FileInfo:   info,
-			CustomName: strings.TrimPrefix(path, basedir.Path),
-		},
-		ReadCloser: file,
-	})
-	if err != nil {
-		return err
+	if customName != "" {
+		err = ar.Write(archiver.File{
+			FileInfo: archiver.FileInfo{
+				FileInfo:   info,
+				CustomName: customName,
+			},
+			ReadCloser: file,
+		})
+		if err != nil {
+			return err
+		}
 	}
 
 	if info.IsDir() {
@@ -151,8 +153,9 @@ func rawDirHandler(w http.ResponseWriter, r *http.Request, d *data, file *files.
 	}
 	defer ar.Close()
 
+	basedir := strings.TrimRight(file.Path, "/\\")
 	for _, fname := range filenames {
-		err = addFile(ar, d, fname, file)
+		err = addFile(ar, d, fname, basedir)
 		if err != nil {
 			return http.StatusInternalServerError, err
 		}
